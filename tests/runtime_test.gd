@@ -40,6 +40,7 @@ func run() -> void:
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(store.path))
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(store.path).get_base_dir())
 	var scene: Node3D = load("res://demo/demo.tscn").instantiate()
+	scene.set_script(load("res://tests/pause_host.gd"))
 	root.add_child(scene)
 	current_scene = scene
 	await process_frame
@@ -51,8 +52,12 @@ func run() -> void:
 	check(canvas.camera != null and canvas.camera.current, "free camera is current")
 	var target := Vector3(0, 0, 0)
 	await physics_frame
+	check(paused and scene.process_mode == Node.PROCESS_MODE_PAUSABLE, "always-processing pause controller suspended")
 	canvas._place(canvas.camera.unproject_position(target))
 	check(canvas.panel.store.notes.size() == 1, "raycast places marker")
+	if canvas.panel.store.notes.is_empty():
+		quit(1)
+		return
 	canvas.panel.title.text = "Old north gate"
 	canvas.panel.instruction.text = "Add a ruined gatehouse and a path through this area."
 	canvas.panel.radius.value = 6
@@ -71,6 +76,7 @@ func run() -> void:
 	canvas._toggle()
 	check(not canvas.active and not paused, "close restores pause state")
 	check(scene.get_node("Camera").current, "close restores game camera")
+	check(scene.process_mode == Node.PROCESS_MODE_ALWAYS, "close restores controller process mode")
 	canvas._toggle()
 	check(canvas.panel.store.notes.size() == 1, "markers persist across Canvas sessions")
 	canvas._toggle()

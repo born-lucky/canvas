@@ -6,7 +6,8 @@ Canvas is being built alongside [Feitoria: Lands Eternal](https://github.com/bor
 
 ## In the Game
 
-Press **F8** to open or close Canvas. Gameplay pauses while Canvas is open.
+Press **F8** to open or close Canvas. Gameplay pauses while Canvas is open;
+scene controllers are suspended and their process modes restored on close.
 Hold **right mouse** to look around; while holding it, **WASD** flies,
 **Q/E** moves down/up, and **Shift** increases speed.
 

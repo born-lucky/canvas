@@ -12,6 +12,8 @@ var mouse_mode := Input.MOUSE_MODE_VISIBLE
 var active := false
 var placing := false
 var scope := ""
+var suspended_nodes: Array = []
+var was_3d_disabled := false
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -57,6 +59,8 @@ func _input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 		return
 	if not active: return
+	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_RIGHT:
+		if not frame.get_global_rect().has_point(event.position): get_viewport().gui_release_focus()
 	if event is InputEventKey and event.pressed and event.physical_keycode == KEY_ESCAPE:
 		if placing:
 			placing = false
@@ -102,12 +106,15 @@ func _toggle() -> void:
 		placing = false
 		if is_instance_valid(original_camera): original_camera.make_current()
 		if is_instance_valid(camera): camera.queue_free()
+		_restore_scene()
 		get_tree().paused = was_paused
+		get_viewport().disable_3d = was_3d_disabled
 		Input.mouse_mode = mouse_mode
 		return
 	original_camera = get_viewport().get_camera_3d()
 	if original_camera == null or get_tree().current_scene == null: return
 	was_paused = get_tree().paused
+	was_3d_disabled = get_viewport().disable_3d
 	mouse_mode = Input.mouse_mode
 	camera = Camera3D.new()
 	get_tree().root.add_child(camera)
@@ -118,7 +125,9 @@ func _toggle() -> void:
 	camera.cull_mask = original_camera.cull_mask
 	camera.environment = original_camera.environment
 	camera.make_current()
+	_suspend_scene(get_tree().current_scene)
 	get_tree().paused = true
+	get_viewport().disable_3d = false
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	active = true
 	scope = _context()
@@ -126,6 +135,23 @@ func _toggle() -> void:
 	frame.show()
 	markers.show()
 	_refresh_markers()
+
+func _suspend_scene(scene: Node) -> void:
+	# Games may have ALWAYS controllers that recompute pause state every frame.
+	# Explicit descendant modes override the root, so suspend them as well.
+	suspended_nodes = []
+	var nodes: Array[Node] = [scene]
+	nodes.append_array(scene.find_children("*", "", true, false))
+	for node in nodes:
+		if node == scene or node.process_mode != Node.PROCESS_MODE_INHERIT:
+			suspended_nodes.append({"node": weakref(node), "mode": node.process_mode})
+			node.process_mode = Node.PROCESS_MODE_PAUSABLE
+
+func _restore_scene() -> void:
+	for saved in suspended_nodes:
+		var node: Node = saved.node.get_ref()
+		if is_instance_valid(node): node.process_mode = saved.mode
+	suspended_nodes = []
 
 func _refresh_markers() -> void:
 	if not is_instance_valid(markers) or not is_instance_valid(get_tree().current_scene): return
@@ -164,7 +190,9 @@ func _select_pin(point: Vector2) -> void:
 
 func _exit_tree() -> void:
 	if active:
+		_restore_scene()
 		get_tree().paused = was_paused
+		get_viewport().disable_3d = was_3d_disabled
 		Input.mouse_mode = mouse_mode
 	if is_instance_valid(camera): camera.queue_free()
 	if is_instance_valid(markers): markers.queue_free()
