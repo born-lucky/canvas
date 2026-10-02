@@ -1,0 +1,6 @@
+.godot/
+__pycache__/
+.canvas/runs/
+.canvas/*.lock/
+.canvas/*.tmp
+test-output/

@@ -1,0 +1,23 @@
+config_version=5
+
+[application]
+config/name="Feitoria Canvas"
+config/use_custom_user_dir=true
+config/custom_user_dir_name="Feitoria Canvas"
+run/main_scene="res://demo/demo.tscn"
+config/features=PackedStringArray("4.5", "GL Compatibility")
+
+[autoload]
+Canvas="*res://addons/canvas/runtime.gd"
+
+[display]
+window/size/viewport_width=1280
+window/size/viewport_height=800
+window/stretch/mode="canvas_items"
+
+[editor_plugins]
+enabled=PackedStringArray("res://addons/canvas/plugin.cfg")
+
+[rendering]
+renderer/rendering_method="gl_compatibility"
+environment/defaults/default_clear_color=Color(0.22, 0.24, 0.26, 1)
