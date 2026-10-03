@@ -163,6 +163,14 @@ class QueueTest(unittest.TestCase):
         example = json.loads((Path(__file__).parents[1] / "examples/note.json").read_text())
         canvas.validate_notes({"version": 1, "notes": [example]})
 
+    def test_visibility_round_trip_and_validation(self):
+        self.note["visible"] = False
+        canvas.write_notes(self.path, {"version": 1, "notes": [self.note]})
+        self.assertIs(canvas.read_notes(self.path)["notes"][0]["visible"], False)
+        self.note["visible"] = "false"
+        with self.assertRaises(ValueError):
+            canvas.write_notes(self.path, {"version": 1, "notes": [self.note]})
+
     def test_create_and_resolve_without_godot(self):
         import io
         from contextlib import redirect_stdout

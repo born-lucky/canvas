@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.2
+
+- Global annotation visibility and persisted per-note visibility.
+- Confirmed stroke clearing without removing the written instruction.
+- Verified note deletion removes its file and persists after reopening.
+- New real screenshots showing annotations visible and hidden.
+
 ## 0.2.1
 
 - Early Macintosh/NeXT-inspired flat monochrome interface, black title bar,

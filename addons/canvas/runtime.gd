@@ -64,6 +64,9 @@ func _ready() -> void:
 		Input.set_default_cursor_shape(Input.CURSOR_CROSS if panel.tool.selected > 0 and active else Input.CURSOR_ARROW))
 	panel.undo_stroke_requested.connect(_undo_stroke)
 	panel.changed.connect(_refresh_markers)
+	panel.annotation_visibility_changed.connect(func():
+		_cancel_drawing()
+		markers.visible = active and panel.annotations_toggle.button_pressed)
 	panel.focus_requested.connect(func(note):
 		if is_instance_valid(camera):
 			var target: Vector3 = panel.store.position_of(note)
@@ -169,7 +172,7 @@ func _toggle() -> void:
 	panel.set_scope(get_tree().current_scene.scene_file_path, scope)
 	frame.show()
 	Input.set_default_cursor_shape(Input.CURSOR_CROSS if panel.tool.selected > 0 else Input.CURSOR_ARROW)
-	markers.show()
+	markers.visible = panel.annotations_toggle.button_pressed
 	_refresh_markers()
 
 func _suspend_scene(scene: Node) -> void:
@@ -192,8 +195,12 @@ func _restore_scene() -> void:
 func _refresh_markers() -> void:
 	if not is_instance_valid(markers) or not is_instance_valid(get_tree().current_scene): return
 	markers.rebuild(panel.store.notes, get_tree().current_scene.scene_file_path, scope)
+	markers.visible = active and panel.annotations_toggle.button_pressed
 
 func _place(point: Vector2) -> void:
+	if not panel.annotations_toggle.button_pressed:
+		panel.message.text = "Show annotations before placing a note"
+		return
 	var origin := camera.project_ray_origin(point)
 	var query := PhysicsRayQueryParameters3D.create(origin, origin + camera.project_ray_normal(point) * 5000)
 	var hit := camera.get_world_3d().direct_space_state.intersect_ray(query)
@@ -234,6 +241,9 @@ func _target(node: Node) -> Dictionary:
 		"scene": source.scene_file_path if source != null else "", "mesh": mesh_path}
 
 func _begin_drawing(point: Vector2) -> void:
+	if not panel.annotations_toggle.button_pressed:
+		panel.message.text = "Show annotations before drawing"
+		return
 	if not panel.selected.is_empty() and panel.selected.status == "working":
 		panel.message.text = "Wait for the worker before editing this note"
 		return
@@ -342,10 +352,12 @@ func _undo_stroke() -> void:
 	else: panel.message.text = panel.store.error
 
 func _select_pin(point: Vector2) -> void:
+	if not panel.annotations_toggle.button_pressed: return
 	var best := 28.0
 	var selected: Dictionary = {}
 	for note in panel.store.notes:
 		if note.scene != panel.scene_path or note.context != scope: continue
+		if not note.get("visible", true): continue
 		var position: Vector3 = panel.store.position_of(note) + Vector3.UP * 0.6
 		if camera.is_position_behind(position): continue
 		var distance := point.distance_to(camera.unproject_position(position))

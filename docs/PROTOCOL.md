@@ -3,6 +3,13 @@
 Canvas by [born-lucky](https://github.com/born-lucky) uses engine-independent
 JSON for spatial annotations and AI instructions. Godot is one adapter.
 
+The optional boolean `visible` defaults to true when absent. It controls only
+scene annotation rendering, not task execution. Hidden notes remain addressable
+by ID and in the note list. Global display toggles do not rewrite individual
+notes. Deleting a note removes its authoritative file; clearing `strokes`
+preserves its instruction. Neither operation reverts AI edits or removes
+separate run-history files.
+
 ## Storage and Identity
 
 Use project-owned `.canvas/`. The manifest `notes.json` is

@@ -60,6 +60,8 @@ def validate_notes(data):
     for note in data["notes"]:
         if not isinstance(note, dict):
             raise ValueError("Invalid marker")
+        if "visible" in note and not isinstance(note["visible"], bool):
+            raise ValueError("Invalid note visibility")
         for key in ("id", "name", "instruction", "scene", "context", "node_path", "status"):
             if not isinstance(note.get(key), str):
                 raise ValueError(f"Invalid marker {key}")

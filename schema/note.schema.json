@@ -14,6 +14,7 @@
     "node_path": {"type": "string"},
     "position": {"$ref": "#/$defs/vector"},
     "radius": {"type": "number", "minimum": 0},
+    "visible": {"type": "boolean", "default": true},
     "status": {"enum": ["draft", "queued", "working", "review", "done", "blocked"]},
     "result": {"type": "string"},
     "created_at": {"type": "string"},

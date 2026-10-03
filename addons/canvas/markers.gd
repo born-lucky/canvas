@@ -12,6 +12,7 @@ func rebuild(notes: Array, scene: String, context: String) -> void:
 		child.queue_free()
 	for note in notes:
 		if note.scene != scene or note.context != context: continue
+		if not note.get("visible", true): continue
 		var anchor := Node3D.new()
 		add_child(anchor)
 		anchor.position = Store.position_of(note)

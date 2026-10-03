@@ -14,6 +14,17 @@ open tools for working directly with AI inside creative projects.
 *Real Godot capture: the yellow loop is a mouse-drawn stroke stored as 3D
 coordinates. The note identifies the enclosed Gatehouse object.*
 
+**Annotations are optional, not permanent changes to your scene.** Hide all
+with **Show annotations**, or hide a single note with **Show this note in scene**.
+Per-note visibility is saved; hiding preserves the note and does not cancel
+queued AI work. Press F8 to close Canvas and hide its overlay entirely.
+**Clear drawing** removes a note's strokes; **×** deletes its saved note file,
+including its instruction and annotation. Both require confirmation. Neither
+action reverts game changes an AI has already made. Worker run logs are separate
+history under `.canvas/runs/` and are not deleted with the note.
+
+![Same scene with Canvas annotations switched off; notes remain available](docs/media/canvas-hidden.png)
+
 ## Use It in Your Project
 
 **Godot 4.5+:** a working adapter is included. Download the

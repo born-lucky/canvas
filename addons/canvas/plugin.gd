@@ -33,6 +33,7 @@ func _enter_tree() -> void:
 		get_editor_interface().get_editor_viewport_3d(0).get_camera_3d().look_at_from_position(
 			panel.store.position_of(note) + Vector3(0, 3, 5), panel.store.position_of(note)))
 	panel.changed.connect(update_overlays)
+	panel.annotation_visibility_changed.connect(update_overlays)
 	scene_changed.connect(_scene_changed)
 	set_input_event_forwarding_always_enabled()
 	set_force_draw_over_forwarding_enabled()
@@ -72,10 +73,12 @@ func _add(root: Node, point: Vector3, node_path: String) -> void:
 	else: panel.message.text = panel.store.error
 
 func _forward_3d_force_draw_over_viewport(control: Control) -> void:
+	if not panel.annotations_toggle.button_pressed: return
 	var camera: Camera3D = get_editor_interface().get_editor_viewport_3d(0).get_camera_3d()
 	if camera == null: return
 	for note in panel.store.notes:
 		if note.scene != panel.scene_path or note.context != panel.context: continue
+		if not note.get("visible", true): continue
 		var point: Vector3 = panel.store.position_of(note)
 		if camera.is_position_behind(point): continue
 		var screen: Vector2 = camera.unproject_position(point)

@@ -6,6 +6,7 @@ signal focus_requested(note: Dictionary)
 signal changed
 signal tool_changed
 signal undo_stroke_requested
+signal annotation_visibility_changed
 const Store = preload("res://addons/canvas/store.gd")
 const Appearance = preload("res://addons/canvas/appearance.gd")
 var store = Store.new()
@@ -29,6 +30,9 @@ var depth: SpinBox
 var target_label: Label
 var delete_dialog: ConfirmationDialog
 var report_toggle: Button
+var annotations_toggle: CheckBox
+var note_visibility: CheckBox
+var clear_dialog: ConfirmationDialog
 
 func _ready() -> void:
 	theme = Appearance.create_theme()
@@ -42,6 +46,11 @@ func _ready() -> void:
 	heading.add_theme_font_size_override("font_size", 16)
 	heading.add_theme_color_override("font_color", Appearance.PAPER)
 	title_bar.add_child(heading)
+	annotations_toggle = CheckBox.new()
+	annotations_toggle.text = "Show annotations"
+	annotations_toggle.button_pressed = true
+	annotations_toggle.toggled.connect(func(_enabled): annotation_visibility_changed.emit())
+	add_child(annotations_toggle)
 	var tool_row := HBoxContainer.new()
 	add_child(tool_row)
 	tool = OptionButton.new()
@@ -102,6 +111,12 @@ func _ready() -> void:
 	target_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	target_label.tooltip_text = "Primary object reference saved with this note"
 	add_child(target_label)
+	note_visibility = CheckBox.new()
+	note_visibility.text = "Show this note in scene"
+	note_visibility.button_pressed = true
+	note_visibility.toggled.connect(func(_enabled):
+		if not selected.is_empty(): _save())
+	add_child(note_visibility)
 	instruction = TextEdit.new()
 	instruction.placeholder_text = "Instruction"
 	instruction.custom_minimum_size.y = 112
@@ -131,6 +146,8 @@ func _ready() -> void:
 		_save())
 	_button(actions, "×", "Delete note", func():
 		if not selected.is_empty(): delete_dialog.popup_centered())
+	_button(actions, "Clear drawing", "Remove all strokes from this note", func():
+		if not selected.is_empty(): clear_dialog.popup_centered())
 	report_toggle = _button(self, "Work report", "Show or hide the AI work report", func():
 		result.visible = not result.visible)
 	report_toggle.alignment = HORIZONTAL_ALIGNMENT_LEFT
@@ -153,6 +170,13 @@ func _ready() -> void:
 			changed.emit()
 		else: message.text = store.error)
 	add_child(delete_dialog)
+	clear_dialog = ConfirmationDialog.new()
+	clear_dialog.dialog_text = "Remove all drawings from this note? Keep its name and instruction."
+	clear_dialog.confirmed.connect(func():
+		if selected.is_empty(): return
+		selected.strokes = []
+		_save())
+	add_child(clear_dialog)
 	refresh()
 
 func _button(parent: Node, text: String, tooltip: String, callback: Callable) -> Button:
@@ -187,6 +211,7 @@ func refresh() -> void:
 		result.text = ""
 		result.hide()
 		report_toggle.text = "Work report"
+		note_visibility.disabled = true
 	message.text = "%d notes" % visible_notes.size()
 
 func _fill_list() -> void:
@@ -206,6 +231,8 @@ func _select_index(index: int) -> void:
 
 func edit_note(note: Dictionary) -> void:
 	selected = note.duplicate(true)
+	note_visibility.disabled = selected.status == "working"
+	note_visibility.set_pressed_no_signal(selected.get("visible", true))
 	title.text = selected.name
 	identifier.text = selected.id
 	identifier.tooltip_text = store.note_path(str(selected.id))
@@ -226,6 +253,7 @@ func _save() -> void:
 	selected.name = title.text.strip_edges()
 	selected.instruction = instruction.text
 	selected.radius = radius.value
+	selected.visible = note_visibility.button_pressed
 	selected.status = Store.STATES[status.selected]
 	if selected.status == "queued": selected.result = ""
 	if store.save_note(selected):

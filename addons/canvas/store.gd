@@ -73,6 +73,7 @@ static func valid_id(id: String) -> bool:
 
 static func valid_note(note: Variant) -> bool:
 	if not note is Dictionary: return false
+	if note.has("visible") and not note.visible is bool: return false
 	for key in ["id", "name", "instruction", "scene", "context", "node_path", "status"]:
 		if not note.get(key) is String: return false
 	if not valid_id(note.id) or note.name.strip_edges().is_empty() or not note.status in STATES: return false

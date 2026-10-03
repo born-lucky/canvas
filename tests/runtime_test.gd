@@ -140,16 +140,39 @@ func run() -> void:
 	canvas.panel.tool.select(1)
 	await process_frame
 	await process_frame
+	canvas.panel.annotations_toggle.button_pressed = false
+	check(not canvas.markers.visible, "global toggle hides all annotations")
+	check(canvas.panel.store.notes.size() == 2, "global hiding preserves stored notes")
+	if not DisplayServer.get_name() == "headless":
+		await RenderingServer.frame_post_draw
+		DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path("res://test-output"))
+		root.get_texture().get_image().save_png("res://test-output/canvas-hidden.png")
+	canvas.panel.annotations_toggle.button_pressed = true
+	var shown_children: int = canvas.markers.get_child_count()
+	canvas.panel.note_visibility.button_pressed = false
+	check(canvas.markers.get_child_count() < shown_children, "hidden note removes its rendered drawings and marker")
+	check(not canvas.panel.store.find(drawn_id).visible, "per-note visibility saved")
+	canvas.panel.store.reload()
+	check(not canvas.panel.store.find(drawn_id).visible, "hidden note survives reload")
+	canvas.panel.note_visibility.button_pressed = true
+	check(canvas.markers.get_child_count() == shown_children, "show restores rendered annotations")
+	check(canvas.panel.store.find(drawn_id).visible, "per-note toggle restores annotations")
 	if not DisplayServer.get_name() == "headless":
 		DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path("res://test-output"))
 		await RenderingServer.frame_post_draw
 		root.get_texture().get_image().save_png("res://test-output/canvas.png")
+	canvas.panel.clear_dialog.confirmed.emit()
+	check(canvas.panel.store.find(drawn_id).strokes.is_empty(), "clear removes all stored strokes")
+	check(canvas.panel.store.find(drawn_id).instruction == "This upper corner is too sharp. Bevel it and preserve the doorway.", "clear preserves instruction")
+	canvas.panel.delete_dialog.confirmed.emit()
+	check(not FileAccess.file_exists(canvas.panel.store.note_path(drawn_id)), "delete removes individual note file")
+	check(canvas.panel.store.notes.size() == 1, "delete preserves unrelated notes")
 	canvas._toggle()
 	check(not canvas.active and not paused, "close restores pause state")
 	check(scene.get_node("Camera").current, "close restores game camera")
 	check(scene.process_mode == Node.PROCESS_MODE_ALWAYS, "close restores controller process mode")
 	canvas._toggle()
-	check(canvas.panel.store.notes.size() == 2, "pins and drawings persist across Canvas sessions")
+	check(canvas.panel.store.notes.size() == 1, "deletion persists across Canvas sessions")
 	check(canvas.panel.store.find(original_id).name == "Old north gate", "drawing preserves unrelated pin")
 	canvas._toggle()
 	cleanup(canvas.panel.store.path)
