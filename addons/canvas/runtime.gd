@@ -3,6 +3,7 @@ extends CanvasLayer
 const CanvasPanel = preload("res://addons/canvas/panel.gd")
 const Markers = preload("res://addons/canvas/markers.gd")
 const Strokes = preload("res://addons/canvas/strokes.gd")
+const Appearance = preload("res://addons/canvas/appearance.gd")
 var panel: VBoxContainer
 var frame: PanelContainer
 var markers: Node3D
@@ -31,10 +32,7 @@ func _ready() -> void:
 		queue_free()
 		return
 	frame = PanelContainer.new()
-	var background := StyleBoxFlat.new()
-	background.bg_color = Color("26282a")
-	background.border_color = Color("55595b")
-	background.set_border_width_all(1)
+	var background := Appearance.box(Appearance.DESK, Appearance.INK, 0)
 	frame.add_theme_stylebox_override("panel", background)
 	frame.set_anchors_and_offsets_preset(Control.PRESET_RIGHT_WIDE)
 	frame.offset_left = -360
@@ -43,10 +41,14 @@ func _ready() -> void:
 	frame.offset_bottom = -16
 	var padding := MarginContainer.new()
 	for edge in ["left", "right", "top", "bottom"]:
-		padding.add_theme_constant_override("margin_" + edge, 12)
+		padding.add_theme_constant_override("margin_" + edge, 8)
 	frame.add_child(padding)
+	var scroll := ScrollContainer.new()
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	padding.add_child(scroll)
 	panel = CanvasPanel.new()
-	padding.add_child(panel)
+	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(panel)
 	add_child(frame)
 	frame.hide()
 	panel.add_requested.connect(func():

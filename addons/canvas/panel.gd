@@ -7,6 +7,7 @@ signal changed
 signal tool_changed
 signal undo_stroke_requested
 const Store = preload("res://addons/canvas/store.gd")
+const Appearance = preload("res://addons/canvas/appearance.gd")
 var store = Store.new()
 var scene_path := ""
 var context := ""
@@ -27,14 +28,20 @@ var ink: ColorPickerButton
 var depth: SpinBox
 var target_label: Label
 var delete_dialog: ConfirmationDialog
+var report_toggle: Button
 
 func _ready() -> void:
+	theme = Appearance.create_theme()
 	custom_minimum_size = Vector2(280, 0)
-	add_theme_constant_override("separation", 8)
+	add_theme_constant_override("separation", 6)
+	var title_bar := PanelContainer.new()
+	title_bar.add_theme_stylebox_override("panel", Appearance.box(Appearance.INK, Appearance.INK, 8))
+	add_child(title_bar)
 	var heading := Label.new()
 	heading.text = "Canvas"
-	heading.add_theme_font_size_override("font_size", 22)
-	add_child(heading)
+	heading.add_theme_font_size_override("font_size", 16)
+	heading.add_theme_color_override("font_color", Appearance.PAPER)
+	title_bar.add_child(heading)
 	var tool_row := HBoxContainer.new()
 	add_child(tool_row)
 	tool = OptionButton.new()
@@ -48,7 +55,7 @@ func _ready() -> void:
 	ink.custom_minimum_size = Vector2(36, 32)
 	ink.tooltip_text = "Ink color"
 	tool_row.add_child(ink)
-	_button(tool_row, "Undo", "Undo last stroke on selected note", func(): undo_stroke_requested.emit())
+	_button(tool_row, "↶", "Undo last stroke on selected note", func(): undo_stroke_requested.emit())
 	var depth_row := HBoxContainer.new()
 	add_child(depth_row)
 	var depth_label := Label.new()
@@ -65,20 +72,20 @@ func _ready() -> void:
 	var row := HBoxContainer.new()
 	add_child(row)
 	add_button = _button(row, "+", "Place marker", func(): add_requested.emit())
-	_button(row, "@", "Focus selected marker", func():
+	_button(row, "⊙", "Focus selected note", func():
 		if not selected.is_empty(): focus_requested.emit(selected))
-	_button(row, "R", "Refresh notes", refresh)
+	_button(row, "↻", "Refresh notes", refresh)
 	search = LineEdit.new()
-	search.placeholder_text = "Search markers"
+	search.placeholder_text = "Search notes"
 	search.text_changed.connect(func(_text): _fill_list())
 	add_child(search)
 	list = ItemList.new()
-	list.custom_minimum_size.y = 90
+	list.custom_minimum_size.y = 112
 	list.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	list.item_selected.connect(_select_index)
 	add_child(list)
 	title = LineEdit.new()
-	title.placeholder_text = "Marker name"
+	title.placeholder_text = "Note name"
 	add_child(title)
 	var identity_row := HBoxContainer.new()
 	add_child(identity_row)
@@ -89,7 +96,7 @@ func _ready() -> void:
 	identifier.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	identifier.tooltip_text = "Permanent note identifier"
 	identity_row.add_child(identifier)
-	_button(identity_row, "Copy", "Copy note ID", func():
+	_button(identity_row, "⧉", "Copy note ID", func():
 		if not selected.is_empty(): DisplayServer.clipboard_set(str(selected.id)))
 	target_label = Label.new()
 	target_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
@@ -97,7 +104,7 @@ func _ready() -> void:
 	add_child(target_label)
 	instruction = TextEdit.new()
 	instruction.placeholder_text = "Instruction"
-	instruction.custom_minimum_size.y = 100
+	instruction.custom_minimum_size.y = 112
 	instruction.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	instruction.wrap_mode = TextEdit.LINE_WRAPPING_BOUNDARY
 	add_child(instruction)
@@ -122,19 +129,23 @@ func _ready() -> void:
 	_button(actions, "Queue", "Queue instruction for AI", func():
 		status.select(Store.STATES.find("queued"))
 		_save())
-	_button(actions, "X", "Delete marker", func():
+	_button(actions, "×", "Delete note", func():
 		if not selected.is_empty(): delete_dialog.popup_centered())
+	report_toggle = _button(self, "Work report", "Show or hide the AI work report", func():
+		result.visible = not result.visible)
+	report_toggle.alignment = HORIZONTAL_ALIGNMENT_LEFT
 	result = TextEdit.new()
 	result.editable = false
 	result.placeholder_text = "Work report"
 	result.custom_minimum_size.y = 60
 	result.wrap_mode = TextEdit.LINE_WRAPPING_BOUNDARY
 	add_child(result)
+	result.hide()
 	message = Label.new()
 	message.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	add_child(message)
 	delete_dialog = ConfirmationDialog.new()
-	delete_dialog.dialog_text = "Delete this marker and its instruction?"
+	delete_dialog.dialog_text = "Delete this note and its instruction?"
 	delete_dialog.confirmed.connect(func():
 		if store.delete_note(str(selected.id)):
 			selected = {}
@@ -174,7 +185,9 @@ func refresh() -> void:
 		target_label.text = ""
 		instruction.text = ""
 		result.text = ""
-	message.text = "%d markers" % visible_notes.size()
+		result.hide()
+		report_toggle.text = "Work report"
+	message.text = "%d notes" % visible_notes.size()
 
 func _fill_list() -> void:
 	list.clear()
@@ -185,6 +198,8 @@ func _fill_list() -> void:
 		visible_notes.append(note)
 		list.add_item("%s  [%s]" % [note.name, note.status])
 		list.set_item_tooltip(list.item_count - 1, note.id + "\n" + note.instruction)
+		if not selected.is_empty() and note.id == selected.id:
+			list.select(list.item_count - 1)
 
 func _select_index(index: int) -> void:
 	edit_note(visible_notes[index])
@@ -200,6 +215,8 @@ func edit_note(note: Dictionary) -> void:
 	radius.value = float(selected.radius)
 	status.select(Store.STATES.find(selected.status))
 	result.text = str(selected.get("result", ""))
+	result.visible = not result.text.is_empty()
+	report_toggle.text = "Work report" + (" •" if not result.text.is_empty() else "")
 	message.text = "%s | %s" % [selected.node_path, str(selected.position)]
 
 func _save() -> void:

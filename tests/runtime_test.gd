@@ -75,6 +75,12 @@ func run() -> void:
 	canvas.panel._save()
 	check(canvas.panel.store.notes[0].name == "Old north gate", "panel save")
 	check(canvas.panel.identifier.text == canvas.panel.store.notes[0].id, "panel shows permanent note ID")
+	check(canvas.panel.identifier.get_theme_color("font_uneditable_color").get_luminance() < 0.1, "read-only note ID has dark readable text")
+	check(not canvas.panel.result.visible, "empty work report is collapsed")
+	canvas.panel.report_toggle.pressed.emit()
+	check(canvas.panel.result.visible, "work report can be expanded")
+	canvas.panel.report_toggle.pressed.emit()
+	check(not canvas.panel.result.visible, "work report can be collapsed")
 	canvas.panel.search.text = canvas.panel.identifier.text
 	canvas.panel._fill_list()
 	check(canvas.panel.visible_notes.size() == 1, "search resolves exact note ID")

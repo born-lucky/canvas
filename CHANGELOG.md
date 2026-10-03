@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.1
+
+- Early Macintosh/NeXT-inspired flat monochrome interface, black title bar,
+  white editing surfaces, compact typography, and crisp square borders.
+- Recognizable toolbar symbols with tooltips, readable note IDs, and selected-note highlighting.
+- Collapsible work reports and scrolling for shorter windows.
+- Rendered drawing tests exercised at 1280x800 and 1024x600.
+
 ## 0.2.0
 
 - Mouse-drawn 3D annotations on a camera-facing plane or collision surfaces.
