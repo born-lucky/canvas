@@ -49,9 +49,8 @@ class QueueTest(unittest.TestCase):
                 canvas.claim(self.path)
 
     def test_duplicate_ids_rejected(self):
-        canvas.write_notes(self.path, {"version": 1, "notes": [self.note, self.note]})
         with self.assertRaises(ValueError):
-            canvas.read_notes(self.path)
+            canvas.write_notes(self.path, {"version": 1, "notes": [self.note, self.note]})
 
     def test_successful_worker_returns_review(self):
         def fake_run(command, **kwargs):
@@ -84,6 +83,50 @@ class QueueTest(unittest.TestCase):
         canvas.install(self.project)
         self.assertTrue((self.project / "addons/canvas/runtime.gd").is_file())
         self.assertFalse((self.project / "canvas.py").exists())
+
+    def test_individual_file_and_rename_preserves_id(self):
+        filename = self.path.parent / "notes" / "marker-1.json"
+        self.assertEqual(json.loads(filename.read_text())["name"], "Gate")
+        self.note["name"] = "North gate"
+        canvas.write_notes(self.path, {"version": 1, "notes": [self.note]})
+        self.assertEqual(json.loads(filename.read_text())["id"], "marker-1")
+        self.assertEqual(json.loads(filename.read_text())["name"], "North gate")
+        self.assertEqual(len(list(filename.parent.glob("*.json"))), 1)
+
+    def test_legacy_migration_keeps_ids_and_backup(self):
+        legacy_path = self.project / "legacy" / "notes.json"
+        legacy_path.parent.mkdir()
+        old = {"version": 1, "notes": [self.note]}
+        legacy_path.write_text(json.dumps(old), encoding="utf-8")
+        self.assertEqual(canvas.read_notes(legacy_path), old)
+        canvas.write_notes(legacy_path, old)
+        self.assertEqual(canvas.read_notes(legacy_path), old)
+        self.assertEqual(json.loads(Path(str(legacy_path) + ".v1.bak").read_text()), old)
+        self.assertEqual(json.loads(legacy_path.read_text())["version"], 2)
+
+    def test_filename_mismatch_and_path_traversal_rejected(self):
+        filename = canvas.note_path(self.path, self.note["id"])
+        altered = dict(self.note, id="different-id")
+        filename.write_text(json.dumps(altered), encoding="utf-8")
+        with self.assertRaises(ValueError):
+            canvas.read_notes(self.path)
+        with self.assertRaises(ValueError):
+            canvas.note_path(self.path, "../../escape")
+
+    def test_unrelated_note_file_unchanged(self):
+        second = dict(self.note, id="marker-2", name="Gate")
+        canvas.write_notes(self.path, {"version": 1, "notes": [self.note, second]})
+        filename = canvas.note_path(self.path, second["id"])
+        original_time = filename.stat().st_mtime_ns
+        canvas.claim(self.path)
+        self.assertEqual(filename.stat().st_mtime_ns, original_time)
+
+    def test_corrupt_individual_note_is_preserved(self):
+        filename = canvas.note_path(self.path, self.note["id"])
+        filename.write_text("bad JSON", encoding="utf-8")
+        with self.assertRaises(ValueError):
+            canvas.claim(self.path)
+        self.assertEqual(filename.read_text(), "bad JSON")
 
 
 if __name__ == "__main__":

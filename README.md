@@ -22,6 +22,10 @@ Hold **right mouse** to look around; while holding it, **WASD** flies,
 Refresh replaces unsaved panel edits with the saved version.
 **X** deletes the selected marker after confirmation.
 
+Each note has a permanent ID beside its editable name. **Copy** copies the full
+ID for instructions such as "build a gatehouse at note x...". Search accepts IDs
+as well as names and instructions. Renaming a note keeps its ID and file path.
+
 ## In the Editor
 
 The Canvas dock uses the same notes file. Select a saved scene and a Node3D,
@@ -87,10 +91,17 @@ after verifying no writer is active.
 
 ## Persistence and Integration
 
-`PROJECT/.canvas/notes.json` is versioned JSON, independent of campaign saves.
+Each note has its own JSON file at `PROJECT/.canvas/notes/<id>.json`, independent
+of campaign saves. The file includes both its permanent ID and editable name.
+New IDs start with `x` followed by 128 bits of random hexadecimal digits.
+Duplicate names are allowed; the ID identifies the exact note.
+`PROJECT/.canvas/notes.json` records the storage format, not the note contents.
+Legacy combined note files are read and migrated on the next save or worker
+update, keeping their existing IDs and a `notes.json.v1.bak` backup.
 Each marker records its stable ID, name, instruction, scene path, context key,
 world coordinates, radius in meters, node path hint, status, and report.
-The addon and worker share an exclusive lock and atomic file replacement.
+The addon and worker share an exclusive lock and atomic replacement of each
+changed note file. Unchanged note files are left untouched.
 Invalid input is reported and preserved; it is not replaced with an empty file.
 
 Implement `canvas_context() -> String` on the running scene to distinguish

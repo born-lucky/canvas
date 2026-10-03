@@ -19,6 +19,7 @@ var result: TextEdit
 var message: Label
 var search: LineEdit
 var add_button: Button
+var identifier: LineEdit
 var delete_dialog: ConfirmationDialog
 
 func _ready() -> void:
@@ -46,6 +47,17 @@ func _ready() -> void:
 	title = LineEdit.new()
 	title.placeholder_text = "Marker name"
 	add_child(title)
+	var identity_row := HBoxContainer.new()
+	add_child(identity_row)
+	identifier = LineEdit.new()
+	identifier.editable = false
+	identifier.add_theme_font_size_override("font_size", 12)
+	identifier.placeholder_text = "Note ID"
+	identifier.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	identifier.tooltip_text = "Permanent note identifier"
+	identity_row.add_child(identifier)
+	_button(identity_row, "Copy", "Copy note ID", func():
+		if not selected.is_empty(): DisplayServer.clipboard_set(str(selected.id)))
 	instruction = TextEdit.new()
 	instruction.placeholder_text = "Instruction"
 	instruction.custom_minimum_size.y = 130
@@ -121,6 +133,7 @@ func refresh() -> void:
 		else: selected = {}
 	if selected.is_empty():
 		title.text = ""
+		identifier.text = ""
 		instruction.text = ""
 		result.text = ""
 	message.text = "%d markers" % visible_notes.size()
@@ -130,10 +143,10 @@ func _fill_list() -> void:
 	visible_notes = []
 	for note in store.notes:
 		if note.scene != scene_path or note.context != context: continue
-		if not search.text.is_empty() and not search.text.to_lower() in (note.name + " " + note.instruction).to_lower(): continue
+		if not search.text.is_empty() and not search.text.to_lower() in (note.id + " " + note.name + " " + note.instruction).to_lower(): continue
 		visible_notes.append(note)
 		list.add_item("%s  [%s]" % [note.name, note.status])
-		list.set_item_tooltip(list.item_count - 1, note.instruction)
+		list.set_item_tooltip(list.item_count - 1, note.id + "\n" + note.instruction)
 
 func _select_index(index: int) -> void:
 	edit_note(visible_notes[index])
@@ -141,6 +154,8 @@ func _select_index(index: int) -> void:
 func edit_note(note: Dictionary) -> void:
 	selected = note.duplicate(true)
 	title.text = selected.name
+	identifier.text = selected.id
+	identifier.tooltip_text = store.note_path(str(selected.id))
 	instruction.text = selected.instruction
 	radius.value = float(selected.radius)
 	status.select(Store.STATES.find(selected.status))

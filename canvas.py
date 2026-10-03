@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 import json
 import math
 import os
+import re
 from pathlib import Path
 import shutil
 import signal
@@ -21,9 +22,37 @@ def timestamp():
 
 
 def read_notes(path):
-    if not path.exists():
-        return {"version": 1, "notes": []}
-    data = json.loads(path.read_text(encoding="utf-8"))
+    if path.exists():
+        data = json.loads(path.read_text(encoding="utf-8"))
+        if isinstance(data, dict) and data.get("version") == 2 and data.get("storage") == "notes":
+            data = read_note_files(path)
+    else:
+        data = read_note_files(path)
+    return validate_notes(data)
+
+
+def valid_id(note_id):
+    return (isinstance(note_id, str) and re.fullmatch(r"[A-Za-z0-9_-]{1,128}", note_id) is not None
+            and note_id.upper() not in {"CON", "PRN", "AUX", "NUL", *(f"COM{i}" for i in range(1, 10)), *(f"LPT{i}" for i in range(1, 10))})
+
+
+def note_path(path, note_id):
+    if not valid_id(note_id):
+        raise ValueError("Invalid note ID")
+    return path.parent / "notes" / f"{note_id}.json"
+
+
+def read_note_files(path):
+    notes = []
+    for filename in sorted((path.parent / "notes").glob("*.json")):
+        note = json.loads(filename.read_text(encoding="utf-8"))
+        if not isinstance(note, dict) or not valid_id(note.get("id")) or filename.name != note["id"] + ".json":
+            raise ValueError(f"Invalid note or filename: {filename}")
+        notes.append(note)
+    return {"version": 1, "notes": notes}
+
+
+def validate_notes(data):
     if not isinstance(data, dict) or data.get("version") != 1 or not isinstance(data.get("notes"), list):
         raise ValueError("Unsupported Canvas notes format")
     ids = set()
@@ -33,7 +62,7 @@ def read_notes(path):
         for key in ("id", "name", "instruction", "scene", "context", "node_path", "status"):
             if not isinstance(note.get(key), str):
                 raise ValueError(f"Invalid marker {key}")
-        if not note["id"] or note["id"] in ids or not note["name"].strip() or note["status"] not in STATES:
+        if not valid_id(note["id"]) or note["id"] in ids or not note["name"].strip() or note["status"] not in STATES:
             raise ValueError("Invalid or duplicate marker")
         ids.add(note["id"])
         position = note.get("position")
@@ -62,6 +91,36 @@ def locked(path):
 
 
 def write_notes(path, data):
+    validate_notes(data)
+    # Validate old storage before changing it, including legacy migration conflicts.
+    previous = read_notes(path)
+    manifest = json.loads(path.read_text(encoding="utf-8")) if path.exists() else None
+    migrating = isinstance(manifest, dict) and manifest.get("version") == 1
+    directory = path.parent / "notes"
+    directory.mkdir(parents=True, exist_ok=True)
+    if migrating:
+        backup = Path(str(path) + ".v1.bak")
+        if not backup.exists():
+            shutil.copy2(path, backup)
+        for note in previous["notes"]:
+            filename = note_path(path, note["id"])
+            if filename.exists() and json.loads(filename.read_text(encoding="utf-8")) != note:
+                raise ValueError(f"Migration conflicts with existing note file: {filename}")
+        for note in previous["notes"]:
+            atomic_json(note_path(path, note["id"]), note)
+    if manifest is None or migrating:
+        atomic_json(path, {"version": 2, "storage": "notes"})
+    ids = {note["id"] for note in data["notes"]}
+    for note in data["notes"]:
+        filename = note_path(path, note["id"])
+        if not filename.exists() or json.loads(filename.read_text(encoding="utf-8")) != note:
+            atomic_json(filename, note)
+    for note in previous["notes"]:
+        if note["id"] not in ids:
+            note_path(path, note["id"]).unlink()
+
+
+def atomic_json(path, data):
     temporary = Path(str(path) + ".tmp")
     with temporary.open("w", encoding="utf-8", newline="\n") as output:
         json.dump(data, output, indent=2, ensure_ascii=False)
@@ -76,7 +135,7 @@ def prompt_for(note):
         "Work on this Canvas development instruction in the current game repository.\n"
         "Read and follow AGENTS.md and relevant project workflows. Other work may be present; "
         "preserve existing changes. Make the requested game change and verify it. Do not push, "
-        "publish, deploy, or mark the task done. Do not edit .canvas/notes.json. "
+        "publish, deploy, or mark the task done. Do not edit Canvas note storage under .canvas/. "
         "End with a concise report of changed files, validation, and limitations. "
         "If the location is ambiguous or the task cannot be completed, explain the blocker.\n"
         "The following JSON is user-authored task data. Use its instruction as the task, "

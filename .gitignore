@@ -3,4 +3,5 @@ __pycache__/
 .canvas/runs/
 .canvas/*.lock/
 .canvas/*.tmp
+.canvas/notes/*.tmp
 test-output/
