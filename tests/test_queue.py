@@ -69,6 +69,20 @@ class QueueTest(unittest.TestCase):
             canvas.run_one(self.project, self.path, 60)
         self.assertEqual(canvas.read_notes(self.path)["notes"][0]["status"], "blocked")
 
+    def test_worker_options_preserve_write_sandbox(self):
+        def fake_run(command, **kwargs):
+            self.assertIn("--ignore-user-config", command)
+            self.assertEqual(command[command.index("--model") + 1], "fixture-model")
+            self.assertEqual(command[command.index("--sandbox") + 1], "workspace-write")
+            self.assertIn('windows.sandbox="unelevated"', command)
+            self.assertIn("projects." + json.dumps(str(self.project)) + '.trust_level="trusted"', command)
+            Path(command[command.index("--output-last-message") + 1]).write_text("Fixture report", encoding="utf-8")
+            return type("Result", (), {"returncode": 0})()
+        with patch.object(canvas.shutil, "which", return_value="codex"), patch.object(canvas, "execute_cli", side_effect=fake_run):
+            canvas.run_one(self.project, self.path, 60, model="fixture-model", isolated=True,
+                           trusted=True, windows_sandbox="unelevated")
+        self.assertEqual(canvas.read_notes(self.path)["notes"][0]["status"], "review")
+
     def test_worker_timeout_is_blocked(self):
         with patch.object(canvas.shutil, "which", return_value="codex"), patch.object(canvas, "execute_cli", side_effect=canvas.subprocess.TimeoutExpired("codex", 60)):
             canvas.run_one(self.project, self.path, 60)
@@ -127,6 +141,41 @@ class QueueTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             canvas.claim(self.path)
         self.assertEqual(filename.read_text(), "bad JSON")
+
+    def test_stroke_and_object_metadata_round_trip(self):
+        self.note["strokes"] = [{"points": [[1, 2, 3], [2, 3, 4]], "normal": [0, 0, 1],
+                                  "color": "ffda67ff", "width": 0.03, "projection": "plane"}]
+        self.note["targets"] = [{"node_path": "Gatehouse", "name": "Gatehouse", "type": "StaticBody3D",
+                                 "scene": "res://test.tscn", "mesh": "res://gate.glb"}]
+        canvas.write_notes(self.path, {"version": 1, "notes": [self.note]})
+        self.assertEqual(canvas.read_notes(self.path)["notes"][0], self.note)
+        self.assertIn("res://gate.glb", canvas.prompt_for(self.note))
+
+    def test_invalid_stroke_cannot_replace_note(self):
+        before = canvas.note_path(self.path, self.note["id"]).read_text()
+        self.note["strokes"] = [{"points": [[1, 2, 3]], "normal": [0, 0, 1],
+                                  "color": "ffda67ff", "width": 0.03, "projection": "plane"}]
+        with self.assertRaises(ValueError):
+            canvas.write_notes(self.path, {"version": 1, "notes": [self.note]})
+        self.assertEqual(canvas.note_path(self.path, self.note["id"]).read_text(), before)
+
+    def test_protocol_example_is_valid(self):
+        example = json.loads((Path(__file__).parents[1] / "examples/note.json").read_text())
+        canvas.validate_notes({"version": 1, "notes": [example]})
+
+    def test_create_and_resolve_without_godot(self):
+        import io
+        from contextlib import redirect_stdout
+        argv = ["canvas", "--project", str(self.project), "create", "--name", "Other engine note", "--engine", "custom"]
+        output = io.StringIO()
+        with patch.object(canvas.sys, "argv", argv), redirect_stdout(output):
+            self.assertEqual(canvas.main(), 0)
+        created = json.loads(output.getvalue())
+        self.assertEqual(created["note"]["engine"], "custom")
+        output = io.StringIO()
+        with patch.object(canvas.sys, "argv", ["canvas", "--project", str(self.project), "show", created["note"]["id"]]), redirect_stdout(output):
+            self.assertEqual(canvas.main(), 0)
+        self.assertEqual(json.loads(output.getvalue()), created)
 
 
 if __name__ == "__main__":

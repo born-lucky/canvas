@@ -3,6 +3,7 @@ extends RefCounted
 
 const DEFAULT_PATH := "res://.canvas/notes.json"
 const STATES := ["draft", "queued", "working", "review", "done", "blocked"]
+const Strokes = preload("res://addons/canvas/strokes.gd")
 var path := DEFAULT_PATH
 var error := ""
 var notes: Array = []
@@ -75,6 +76,12 @@ static func valid_note(note: Variant) -> bool:
 	for key in ["id", "name", "instruction", "scene", "context", "node_path", "status"]:
 		if not note.get(key) is String: return false
 	if not valid_id(note.id) or note.name.strip_edges().is_empty() or not note.status in STATES: return false
+	if not Strokes.valid(note.get("strokes", [])): return false
+	if not note.get("targets", []) is Array: return false
+	for target in note.get("targets", []):
+		if not target is Dictionary: return false
+		for key in ["node_path", "name", "type", "scene", "mesh"]:
+			if not target.get(key) is String: return false
 	if not note.get("position") is Array or note.position.size() != 3: return false
 	for value in note.position:
 		if not (value is float or value is int) or not is_finite(float(value)): return false
@@ -93,7 +100,8 @@ func create(scene: String, context: String, position: Vector3, node_path := "") 
 		"instruction": "", "scene": scene, "context": context, "node_path": node_path,
 		"position": [position.x, position.y, position.z], "radius": 0.0,
 		"status": "draft", "created_at": Time.get_datetime_string_from_system(true),
-		"updated_at": Time.get_datetime_string_from_system(true), "result": ""}
+		"updated_at": Time.get_datetime_string_from_system(true), "result": "", "strokes": [], "targets": [],
+		"engine": "godot", "coordinate_system": {"up_axis": "Y", "forward_axis": "-Z", "unit": "meter"}}
 
 func save_note(note: Dictionary) -> bool:
 	return _write_change(note, false)

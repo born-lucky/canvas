@@ -5,3 +5,5 @@ __pycache__/
 .canvas/*.tmp
 .canvas/notes/*.tmp
 test-output/
+dist/
+docs/media/*.import

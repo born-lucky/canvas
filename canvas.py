@@ -13,6 +13,7 @@ import signal
 import subprocess
 import sys
 import time
+import uuid
 
 STATES = {"draft", "queued", "working", "review", "done", "blocked"}
 
@@ -73,6 +74,31 @@ def validate_notes(data):
                 raise ValueError("Invalid marker coordinates or radius")
         if note["radius"] < 0:
             raise ValueError("Invalid marker radius")
+        strokes = note.get("strokes", [])
+        if not isinstance(strokes, list) or len(strokes) > 256:
+            raise ValueError("Invalid strokes")
+        for stroke in strokes:
+            if not isinstance(stroke, dict) or stroke.get("projection") not in {"plane", "surface"}:
+                raise ValueError("Invalid stroke projection")
+            points = stroke.get("points")
+            if not isinstance(points, list) or not 2 <= len(points) <= 4096:
+                raise ValueError("Invalid stroke points")
+            for vector in [*points, stroke.get("normal")]:
+                if not isinstance(vector, list) or len(vector) != 3 or any(isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v) for v in vector):
+                    raise ValueError("Invalid stroke coordinate")
+            if sum(v * v for v in stroke["normal"]) < 0.0001:
+                raise ValueError("Invalid stroke normal")
+            width = stroke.get("width")
+            if isinstance(width, bool) or not isinstance(width, (int, float)) or not math.isfinite(width) or not 0 < width <= 10:
+                raise ValueError("Invalid stroke width")
+            if not isinstance(stroke.get("color"), str) or re.fullmatch(r"#?(?:[0-9a-fA-F]{6}|[0-9a-fA-F]{8})", stroke["color"]) is None:
+                raise ValueError("Invalid stroke color")
+        targets = note.get("targets", [])
+        if not isinstance(targets, list):
+            raise ValueError("Invalid targets")
+        for target in targets:
+            if not isinstance(target, dict) or any(not isinstance(target.get(key), str) for key in ("node_path", "name", "type", "scene", "mesh")):
+                raise ValueError("Invalid target")
     return data
 
 
@@ -132,9 +158,11 @@ def atomic_json(path, data):
 
 def prompt_for(note):
     return (
-        "Work on this Canvas development instruction in the current game repository.\n"
+        "Work on this Canvas development instruction in the current project repository.\n"
         "Read and follow AGENTS.md and relevant project workflows. Other work may be present; "
-        "preserve existing changes. Make the requested game change and verify it. Do not push, "
+        "preserve existing changes. Resolve the primary node_path and targets to real project "
+        "objects and source assets before editing. Strokes mark the annotated region; do not "
+        "assume all enclosed objects should change. Make the requested change and verify it. Do not push, "
         "publish, deploy, or mark the task done. Do not edit Canvas note storage under .canvas/. "
         "End with a concise report of changed files, validation, and limitations. "
         "If the location is ambiguous or the task cannot be completed, explain the blocker.\n"
@@ -199,7 +227,7 @@ def execute_cli(command, *, input, text, encoding, stdout, stderr, timeout, cwd,
         return subprocess.CompletedProcess(command, process.returncode)
 
 
-def run_one(project, path, timeout, workspace=None):
+def run_one(project, path, timeout, workspace=None, model=None, isolated=False, trusted=False, windows_sandbox=None):
     executable = shutil.which("codex")
     if executable is None:
         raise RuntimeError("Codex CLI is not installed or on PATH")
@@ -207,7 +235,6 @@ def run_one(project, path, timeout, workspace=None):
     if note is None:
         return False
     # Filenames use a new generated token, never untrusted marker IDs.
-    import uuid
     run_dir = path.parent / "runs" / uuid.uuid4().hex
     run_dir.mkdir(parents=True)
     report_path = run_dir / "report.txt"
@@ -215,6 +242,12 @@ def run_one(project, path, timeout, workspace=None):
     workspace = workspace or project
     command = [executable, "exec", "--cd", str(workspace), "--sandbox", "workspace-write",
                "--color", "never", "--output-last-message", str(report_path), "-"]
+    if model: command[2:2] = ["--model", model]
+    if isolated: command.insert(2, "--ignore-user-config")
+    if trusted:
+        command[2:2] = ["-c", "projects." + json.dumps(str(workspace)) + '.trust_level="trusted"']
+    if windows_sandbox:
+        command[2:2] = ["-c", 'windows.sandbox="' + windows_sandbox + '"']
     print(f"Working: {note['name']} ({note['id']})", flush=True)
     state = "blocked"
     result = ""
@@ -257,28 +290,61 @@ def install(project):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--project", type=Path, required=True, help="Godot project directory")
+    parser.add_argument("--project", type=Path, required=True, help="Game or engine project directory containing Canvas notes")
     parser.add_argument("--workspace", type=Path, help="Game repository root writable by the worker; defaults to --project")
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("install")
     sub.add_parser("list")
+    create = sub.add_parser("create", help="Create a note for any project")
+    create.add_argument("--name", required=True)
+    create.add_argument("--instruction", default="")
+    create.add_argument("--scene", default="default")
+    create.add_argument("--context", default="")
+    create.add_argument("--position", nargs=3, type=float, default=[0, 0, 0])
+    create.add_argument("--engine", default="generic")
+    show = sub.add_parser("show", help="Resolve a permanent note ID")
+    show.add_argument("id")
     export = sub.add_parser("export")
     export.add_argument("--id")
     worker = sub.add_parser("work")
     worker.add_argument("--watch", action="store_true")
     worker.add_argument("--interval", type=float, default=15)
     worker.add_argument("--timeout", type=int, default=1800)
+    worker.add_argument("--model", help="Override the CLI model with one available to your account")
+    worker.add_argument("--isolated", action="store_true", help="Use CLI defaults and auth without loading global user config or unrelated MCP servers")
+    worker.add_argument("--trust-workspace", action="store_true", help="Trust the specified workspace for this invocation while retaining workspace-write sandbox limits")
+    worker.add_argument("--windows-sandbox", choices=["elevated", "unelevated"], help="Explicit native Windows sandbox implementation, for configured hosts")
     recover = sub.add_parser("recover")
     recover.add_argument("id")
     args = parser.parse_args()
     project = args.project.resolve()
     workspace = args.workspace.resolve() if args.workspace else project
-    if not (project / "project.godot").is_file():
-        parser.error("--project must contain project.godot")
+    if not project.is_dir():
+        parser.error("--project must be an existing project directory")
+    if args.command == "install" and not (project / "project.godot").is_file():
+        parser.error("The included addon installer requires a Godot project. Other engines can use the note protocol and worker.")
     path = project / ".canvas" / "notes.json"
     try:
         if args.command == "install":
             install(project)
+        elif args.command == "create":
+            with locked(path):
+                data = read_notes(path)
+                note_id = "x" + uuid.uuid4().hex
+                while any(note["id"] == note_id for note in data["notes"]):
+                    note_id = "x" + uuid.uuid4().hex
+                note = {"id": note_id, "name": args.name, "instruction": args.instruction,
+                        "scene": args.scene, "context": args.context, "node_path": "",
+                        "position": args.position, "radius": 0, "status": "draft",
+                        "created_at": timestamp(), "updated_at": timestamp(), "result": "",
+                        "engine": args.engine, "strokes": [], "targets": []}
+                data["notes"].append(note)
+                write_notes(path, data)
+            print(json.dumps({"note": note, "file": str(note_path(path, note_id))}, indent=2))
+        elif args.command == "show":
+            note = next((note for note in read_notes(path)["notes"] if note["id"] == args.id), None)
+            if note is None: raise ValueError(f"Note ID not found: {args.id}")
+            print(json.dumps({"note": note, "file": str(note_path(path, args.id))}, indent=2))
         elif args.command == "list":
             for note in read_notes(path)["notes"]:
                 print(f"{note['id']}  {note['status']:8}  {note['name']}  {note['context']}")
@@ -292,7 +358,7 @@ def main():
             if args.interval < 1 or args.timeout < 1:
                 parser.error("Interval and timeout must be positive")
             while True:
-                worked = run_one(project, path, args.timeout, workspace)
+                worked = run_one(project, path, args.timeout, workspace, args.model, args.isolated, args.trust_workspace, args.windows_sandbox)
                 if not args.watch:
                     break
                 if not worked:

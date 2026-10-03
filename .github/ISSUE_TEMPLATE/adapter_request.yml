@@ -1,0 +1,16 @@
+name: Engine or tool adapter
+description: Propose a Canvas integration
+body:
+  - type: input
+    id: host
+    attributes:
+      label: Engine or application and version
+    validations:
+      required: true
+  - type: textarea
+    id: capabilities
+    attributes:
+      label: Desired integration
+      description: Describe capture, targets, storage, undo, and AI needs. Can you help implement or test it?
+    validations:
+      required: true

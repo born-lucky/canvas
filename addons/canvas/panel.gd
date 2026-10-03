@@ -4,6 +4,8 @@ extends VBoxContainer
 signal add_requested
 signal focus_requested(note: Dictionary)
 signal changed
+signal tool_changed
+signal undo_stroke_requested
 const Store = preload("res://addons/canvas/store.gd")
 var store = Store.new()
 var scene_path := ""
@@ -20,6 +22,10 @@ var message: Label
 var search: LineEdit
 var add_button: Button
 var identifier: LineEdit
+var tool: OptionButton
+var ink: ColorPickerButton
+var depth: SpinBox
+var target_label: Label
 var delete_dialog: ConfirmationDialog
 
 func _ready() -> void:
@@ -29,6 +35,33 @@ func _ready() -> void:
 	heading.text = "Canvas"
 	heading.add_theme_font_size_override("font_size", 22)
 	add_child(heading)
+	var tool_row := HBoxContainer.new()
+	add_child(tool_row)
+	tool = OptionButton.new()
+	for mode in ["Pin", "Draw", "Surface"]: tool.add_item(mode)
+	tool.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	tool.tooltip_text = "Pin, freehand in 3D, or draw on collision surfaces"
+	tool.item_selected.connect(func(_index): tool_changed.emit())
+	tool_row.add_child(tool)
+	ink = ColorPickerButton.new()
+	ink.color = Color("ffda67")
+	ink.custom_minimum_size = Vector2(36, 32)
+	ink.tooltip_text = "Ink color"
+	tool_row.add_child(ink)
+	_button(tool_row, "Undo", "Undo last stroke on selected note", func(): undo_stroke_requested.emit())
+	var depth_row := HBoxContainer.new()
+	add_child(depth_row)
+	var depth_label := Label.new()
+	depth_label.text = "Depth (m)"
+	depth_row.add_child(depth_label)
+	depth = SpinBox.new()
+	depth.min_value = 0.25
+	depth.max_value = 5000
+	depth.value = 10
+	depth.step = 0.5
+	depth.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	depth.tooltip_text = "Drawing distance when the first point has no surface"
+	depth_row.add_child(depth)
 	var row := HBoxContainer.new()
 	add_child(row)
 	add_button = _button(row, "+", "Place marker", func(): add_requested.emit())
@@ -40,7 +73,7 @@ func _ready() -> void:
 	search.text_changed.connect(func(_text): _fill_list())
 	add_child(search)
 	list = ItemList.new()
-	list.custom_minimum_size.y = 130
+	list.custom_minimum_size.y = 90
 	list.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	list.item_selected.connect(_select_index)
 	add_child(list)
@@ -58,9 +91,13 @@ func _ready() -> void:
 	identity_row.add_child(identifier)
 	_button(identity_row, "Copy", "Copy note ID", func():
 		if not selected.is_empty(): DisplayServer.clipboard_set(str(selected.id)))
+	target_label = Label.new()
+	target_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	target_label.tooltip_text = "Primary object reference saved with this note"
+	add_child(target_label)
 	instruction = TextEdit.new()
 	instruction.placeholder_text = "Instruction"
-	instruction.custom_minimum_size.y = 130
+	instruction.custom_minimum_size.y = 100
 	instruction.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	instruction.wrap_mode = TextEdit.LINE_WRAPPING_BOUNDARY
 	add_child(instruction)
@@ -90,7 +127,7 @@ func _ready() -> void:
 	result = TextEdit.new()
 	result.editable = false
 	result.placeholder_text = "Work report"
-	result.custom_minimum_size.y = 80
+	result.custom_minimum_size.y = 60
 	result.wrap_mode = TextEdit.LINE_WRAPPING_BOUNDARY
 	add_child(result)
 	message = Label.new()
@@ -134,6 +171,7 @@ func refresh() -> void:
 	if selected.is_empty():
 		title.text = ""
 		identifier.text = ""
+		target_label.text = ""
 		instruction.text = ""
 		result.text = ""
 	message.text = "%d markers" % visible_notes.size()
@@ -156,6 +194,8 @@ func edit_note(note: Dictionary) -> void:
 	title.text = selected.name
 	identifier.text = selected.id
 	identifier.tooltip_text = store.note_path(str(selected.id))
+	target_label.text = "Target: " + (selected.node_path if not selected.node_path.is_empty() else "World space")
+	target_label.tooltip_text = selected.node_path
 	instruction.text = selected.instruction
 	radius.value = float(selected.radius)
 	status.select(Store.STATES.find(selected.status))

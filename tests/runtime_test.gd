@@ -82,7 +82,56 @@ func run() -> void:
 	canvas.panel.status.select(Store.STATES.find("queued"))
 	canvas.panel._save()
 	check(canvas.panel.store.notes[0].status == "queued", "queue instruction")
-	canvas.panel.focus_requested.emit(canvas.panel.store.notes[0])
+	var original_id: String = canvas.panel.store.notes[0].id
+	canvas.panel.selected = {}
+	canvas.panel.tool.select(1)
+	canvas.camera.global_transform = scene.get_node("Camera").global_transform
+	var drawing_center: Vector2 = canvas.camera.unproject_position(Vector3(-4, 2, 0))
+	for index in range(65):
+		var angle := TAU * index / 64.0
+		var cursor := drawing_center + Vector2(cos(angle) * 150, sin(angle) * 105)
+		if index == 0:
+			var press := InputEventMouseButton.new()
+			press.button_index = MOUSE_BUTTON_LEFT
+			press.pressed = true
+			press.position = cursor
+			canvas._input(press)
+		else:
+			var motion := InputEventMouseMotion.new()
+			motion.position = cursor
+			canvas._input(motion)
+	var release := InputEventMouseButton.new()
+	release.button_index = MOUSE_BUTTON_LEFT
+	canvas._input(release)
+	check(canvas.panel.store.notes.size() == 2, "mouse drawing creates a separate note")
+	var drawn_id: String = canvas.panel.selected.id
+	check(canvas.panel.selected.strokes.size() == 1, "freehand stroke saved")
+	check(canvas.panel.selected.strokes[0].points.size() > 30, "stroke stores actual 3D samples")
+	var gate_target := false
+	for record in canvas.panel.selected.targets:
+		if record.name == "Gatehouse": gate_target = true
+	check(gate_target, "circle resolves enclosed object target")
+	canvas.panel.title.text = "Gatehouse corner"
+	canvas.panel.instruction.text = "This upper corner is too sharp. Bevel it and preserve the doorway."
+	canvas.panel._save()
+	canvas.panel.store.reload()
+	check(canvas.panel.store.find(drawn_id).strokes.size() == 1, "drawing survives disk reload")
+	canvas.panel.ink.color = Color("ff716b")
+	canvas._begin_drawing(drawing_center + Vector2(-120, -135))
+	for offset in [Vector2(-80, -105), Vector2(-40, -75), Vector2(0, -45), Vector2(-30, -48), Vector2(0, -45), Vector2(-8, -78)]:
+		canvas._sample_drawing(drawing_center + offset)
+	canvas._finish_drawing()
+	check(canvas.panel.selected.strokes.size() == 2, "freehand arrow added to same note")
+	canvas.panel.tool.select(2)
+	var surface_start: Vector2 = canvas.camera.unproject_position(Vector3(-4.5, 3, 1.51))
+	canvas._begin_drawing(surface_start)
+	for index in range(8):
+		canvas._sample_drawing(surface_start + Vector2(index * 6, index * 2))
+	canvas._finish_drawing()
+	check(canvas.panel.selected.strokes.size() == 3, "surface stroke appended to same note")
+	canvas._undo_stroke()
+	check(canvas.panel.selected.strokes.size() == 2, "undo removes last persisted stroke")
+	canvas.panel.tool.select(1)
 	await process_frame
 	await process_frame
 	if not DisplayServer.get_name() == "headless":
@@ -94,7 +143,8 @@ func run() -> void:
 	check(scene.get_node("Camera").current, "close restores game camera")
 	check(scene.process_mode == Node.PROCESS_MODE_ALWAYS, "close restores controller process mode")
 	canvas._toggle()
-	check(canvas.panel.store.notes.size() == 1, "markers persist across Canvas sessions")
+	check(canvas.panel.store.notes.size() == 2, "pins and drawings persist across Canvas sessions")
+	check(canvas.panel.store.find(original_id).name == "Old north gate", "drawing preserves unrelated pin")
 	canvas._toggle()
 	cleanup(canvas.panel.store.path)
 	if not failed: print("CANVAS_TEST_OK")

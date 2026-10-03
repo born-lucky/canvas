@@ -1,135 +1,158 @@
 # Canvas
 
-Persistent spatial development notes for Godot 4.5+: walk or fly around a real
-game scene, name places, highlight an area, and leave instructions for an AI.
-Canvas is being built alongside [Feitoria: Lands Eternal](https://github.com/born-lucky/feitoria-lands-eternal).
+**Draw what you mean. Give your AI a place to work.**
 
-## In the Game
+Canvas turns marks in your project into persistent, addressable instructions.
+Circle a model, sketch a path, highlight a broken corner, or pin a place to
+build. Name the note and tell your AI what should change.
 
-Press **F8** to open or close Canvas. Gameplay pauses while Canvas is open;
-scene controllers are suspended and their process modes restored on close.
-Hold **right mouse** to look around; while holding it, **WASD** flies,
-**Q/E** moves down/up, and **Shift** increases speed.
+Created by **[born-lucky](https://github.com/born-lucky)**, an AI creator building
+open tools for working directly with AI inside creative projects.
 
-1. Press **+**, then click a collision surface in the scene.
-2. Give the marker a name and an instruction. Press **Save**.
-3. Set a radius above zero to highlight an area around the marker.
-4. Press **Queue** to authorize that instruction for the worker.
-5. Click a pin or select its entry to edit it. **@** focuses the camera on it.
-6. Review the worker's report and game changes, then set the marker to **Done**.
+![Canvas drawing a 3D annotation around an object, with its permanent ID, target, and instruction](docs/media/canvas-drawing.png)
 
-**Esc** cancels placement or closes Canvas. **R** refreshes notes and reports.
-Refresh replaces unsaved panel edits with the saved version.
-**X** deletes the selected marker after confirmation.
+*Real Godot capture: the yellow loop is a mouse-drawn stroke stored as 3D
+coordinates. The note identifies the enclosed Gatehouse object.*
 
-Each note has a permanent ID beside its editable name. **Copy** copies the full
-ID for instructions such as "build a gatehouse at note x...". Search accepts IDs
-as well as names and instructions. Renaming a note keeps its ID and file path.
+## Use It in Your Project
 
-## In the Editor
+**Godot 4.5+:** a working adapter is included. Download the
+[latest release](https://github.com/born-lucky/canvas/releases/latest), copy
+`addons/canvas` into your project, and enable **Canvas** in
+**Project Settings > Plugins**. Press **F8** while playing.
+No Python or AI account is required to draw and save notes.
 
-The Canvas dock uses the same notes file. Select a saved scene and a Node3D,
-then press **+** to anchor a note at its current world position. With no single
-3D node selected, **+** arms placement on collision surfaces in the 3D viewport.
-Pins are drawn over the primary 3D editor viewport. Editor overlays are not
-saved into the scene. Runtime-generated terrain is best annotated in play mode.
+**Other engines and creative tools:** Canvas's files and queue are independent
+of Godot. Give your AI this prompt to implement an adapter for your project:
 
-## Install
+```text
+Integrate the Canvas annotation framework by born-lucky into this project:
+https://github.com/born-lucky/canvas
 
-Python 3.10+ is required for installation and the worker, but not for the addon.
-
-```powershell
-python canvas.py --project "C:/path/to/game/Godot" install
+Read INTEGRATE_WITH_AI.md, docs/PROTOCOL.md, and schema/note.schema.json.
+Use the project's native UI and renderer. Add mouse-drawn annotations,
+stable note IDs, object references, per-note project files, and AI task
+export. Preserve existing project behavior and verify saving, reloading,
+undo, and resolving a note ID. Keep the creator attribution and MIT license
+in the integration's documentation. Report any unsupported capabilities.
 ```
 
-Enable **Canvas** under Godot **Project Settings > Plugins**. This installs its
-play-mode autoload. Disabling the plugin removes that autoload. A distributable
-release skips the runtime tool unless `canvas/enable_in_release` is true.
-Re-run installation after updating Canvas; the installed addon is a copy.
+The Godot adapter is ready today. Unity, Unreal, Blender, web editors, and
+custom engines need their own adapter; the prompt is an integration brief,
+not a promise of automatic compatibility. Contributions are welcome.
 
-Open this repository's `project.godot` to try the small independent demo.
+## Draw, Name, Instruct
 
-## Work While Away
+1. Open Canvas with **F8** and choose **Draw**.
+2. Drag the left mouse button to circle, underline, sketch, or scribble in 3D.
+3. Name the note and write the change you want. Each note gets a permanent ID.
+4. Press **Queue** to authorize work, or copy its ID into a conversation:
+   "Fix the sharp corner at note x... without changing the doorway."
+5. Review the AI's changes and report before marking the note **Done**.
 
-The worker uses [Codex non-interactive mode](https://learn.chatgpt.com/docs/non-interactive-mode).
-Install and sign into the Codex CLI first. From the game repository root:
+**Draw** uses a camera-facing plane anchored at the first hit surface, or at
+the chosen depth when starting in empty space. Strokes remain in world space
+when you move the camera. **Surface** follows collision geometry. **Pin** places
+individual markers; a radius adds a circular area highlight.
 
-```powershell
-python Tools/canvas/canvas.py --project Godot --workspace . list
-python Tools/canvas/canvas.py --project Godot --workspace . export
-python Tools/canvas/canvas.py --project Godot --workspace . work
-python Tools/canvas/canvas.py --project Godot --workspace . work --watch
+Select a note to add strokes to it. **+** starts a new drawing note. **Undo**
+removes the latest stroke. **Esc** cancels an unfinished stroke. Choose ink
+with the color swatch. **Copy** copies the permanent ID; search accepts IDs,
+names, and instructions. Names can change without changing IDs.
+
+Hold **right mouse** to look; while holding it, **WASD** flies, **Q/E** changes
+height, and **Shift** increases speed. **@** focuses the selected note.
+**R** refreshes notes and reports, replacing unsaved panel edits. **X** deletes
+a note after confirmation. F8 restores normal gameplay.
+
+The editor dock supports pins and displays saved drawings. Freehand capture is
+currently a play-mode feature. The editor overlay uses the primary 3D viewport.
+
+## Open Framework
+
+Canvas consists of an **open note protocol**, a **Godot adapter**, and an
+**optional local AI worker**. They share human-readable files:
+
+```text
+your-project/
+  .canvas/
+    notes.json                 # Storage-format manifest
+    notes/
+      x<permanent-id>.json      # One note: name, strokes, targets, instruction
+    runs/                      # Optional worker reports and logs
 ```
 
-`work` processes one queued instruction. `--watch` waits for further queued
-instructions and processes them one at a time. Keep the computer awake,
-connected, and the worker running while you are away. This is a local worker;
-the tool does not provision a cloud machine or GitHub Actions runner.
+The protocol can describe 3D space, 2D space using z=0, and object-based tools.
+An adapter must declare its coordinate convention and implement native picking
+and rendering. No engine dependency is required to read the files or run the
+queue. See [the protocol](docs/PROTOCOL.md), [note schema](schema/note.schema.json),
+and [AI integration brief](INTEGRATE_WITH_AI.md).
 
-The worker is allowed to edit the specified workspace and uses the CLI's
-`workspace-write` sandbox. It follows the project's AGENTS.md and workflows,
-preserves existing changes, and is instructed to verify its work and leave a
-report. It does not automatically commit or push changes. Instructions are
-user-authored tasks: queue only work you intend to authorize.
+The files belong to your project and can be versioned in Git or read by other
+agents. Existing combined notes migrate on the next save or worker update,
+retaining IDs and a backup. A shared lock and atomic file replacement protect
+writes; malformed notes are preserved and reported.
 
-State progression: **Draft -> Queued -> Working -> Review -> Done**.
-A CLI failure or timeout becomes **Blocked**. A successful CLI exit becomes
-**Review**, including reports that explain an incomplete task. A human verifies
-the result before marking it Done. Reports and process logs are preserved under
-`.canvas/runs/`. Stop the watch loop with Ctrl+C.
+## Optional AI Worker
 
-If a worker was killed or the computer restarted with a Working marker, inspect
-the game changes, stop any surviving worker processes, and run:
+The worker requires Python 3.10+ and an installed, signed-in
+[Codex CLI](https://learn.chatgpt.com/docs/non-interactive-mode). Other agents
+can read the same notes or consume exported instructions.
 
-```powershell
-python Tools/canvas/canvas.py --project Godot recover MARKER_ID
+```sh
+git clone https://github.com/born-lucky/canvas.git
+python canvas/canvas.py --project /path/to/project list
+python canvas/canvas.py --project /path/to/project show NOTE_ID
+python canvas/canvas.py --project /path/to/project export --id NOTE_ID
+python canvas/canvas.py --project /path/to/project --workspace /path/to/repo work --watch
 ```
 
-Recovery marks the task Blocked; it never automatically retries interrupted
-work. An abandoned `.canvas/notes.json.lock` directory must be removed manually
-after verifying no writer is active.
+The worker processes queued notes one at a time, passing their instructions,
+3D strokes, and object/source references to the AI. It uses `workspace-write`,
+follows project instructions, and requests verification. Keep the computer
+awake and connected. It does not automatically commit or push.
 
-## Persistence and Integration
+**Draft -> Queued -> Working -> Review -> Done.** Failures or timeouts become
+Blocked. A successful CLI exit returns Review, even if its report describes
+incomplete work. See [worker recovery](docs/WORKER.md) for interrupted jobs.
+The local live worker check was blocked by Windows sandbox permissions;
+automated worker tests use a simulated CLI, not verified AI asset repairs.
 
-Each note has its own JSON file at `PROJECT/.canvas/notes/<id>.json`, independent
-of campaign saves. The file includes both its permanent ID and editable name.
-New IDs start with `x` followed by 128 bits of random hexadecimal digits.
-Duplicate names are allowed; the ID identifies the exact note.
-`PROJECT/.canvas/notes.json` records the storage format, not the note contents.
-Legacy combined note files are read and migrated on the next save or worker
-update, keeping their existing IDs and a `notes.json.v1.bak` backup.
-Each marker records its stable ID, name, instruction, scene path, context key,
-world coordinates, radius in meters, node path hint, status, and report.
-The addon and worker share an exclusive lock and atomic replacement of each
-changed note file. Unchanged note files are left untouched.
-Invalid input is reported and preserved; it is not replaced with an empty file.
+Drawing on a model supplies context for the AI; it does not itself repair the
+mesh. The current worker edits project files. **Streaming AI construction into
+a running scene and automatic asset hot reload are not implemented yet.**
 
-Implement `canvas_context() -> String` on the running scene to distinguish
-procedural seeds, towns, map variants, or interiors within one scene file.
-Otherwise Canvas uses the scene root's `canvas_context` metadata, defaulting to
-an empty string. Use that metadata in the editor to match runtime contexts.
-Feitoria supplies keys for its land-cell seed and size, and campaign location
-and world seed, with a separate key for each building interior. Different keys
-have separate marker sets.
+## Current Boundaries
 
-Coordinates are fixed world-space snapshots, not moving object attachments.
-Renaming a node does not delete its marker. Changing the scene path, terrain
-generation, coordinate origin, or layout may require migrating old notes.
-The area highlight is a horizontal ring; it does not drape over terrain.
-Free flight surveys already-loaded geometry while the game is paused; it does
-not drive a game's procedural streaming system. The first version has pins and
-circular areas; arbitrary paint strokes and asset-placement tools are future work.
+- Godot 4.5 on Windows is tested locally; other platforms are unverified.
+- Object picking and Surface drawing require collision geometry. Empty-space
+  Draw works at a chosen depth. Inspect the displayed Target before queuing.
+- Object references are hints; renamed nodes or regenerated maps may need retargeting.
+- Strokes are fixed world-space annotations, not moving-object attachments.
+- Surveying pauses gameplay and uses loaded geometry, without driving streaming.
+- Other engine adapters, live editing, and cloud workers are future work.
 
-## Verify
+## Develop and Contribute
 
-```powershell
+```sh
 python -m unittest discover -s tests -v
 godot --headless --path . --editor --import --quit
 godot --headless --path . --script res://tests/runtime_test.gd
 godot --path . --script res://tests/runtime_test.gd
 ```
 
-The Godot test must print `CANVAS_TEST_OK`. The rendered run also writes
-`test-output/canvas.png`. Worker tests use a simulated CLI; they do not send
-paid AI requests or modify a game. The addon uses Godot's
-[EditorPlugin API](https://docs.godotengine.org/en/stable/classes/class_editorplugin.html).
+Godot must print `CANVAS_TEST_OK`; the rendered test also saves a screenshot.
+Tests cover mouse-event drawing, surface strokes, object targeting, undo, IDs,
+persistence, migration, locks, malformed data, and camera/pause restoration.
+Worker tests simulate the CLI rather than spend AI credits or mutate a project.
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) and [CHANGELOG.md](CHANGELOG.md).
+Built alongside [Feitoria: Lands Eternal](https://github.com/born-lucky/feitoria-lands-eternal),
+but the addon contains no Feitoria assets or game logic.
+
+## Creator and License
+
+**Canvas is an open project by [born-lucky](https://github.com/born-lucky).**
+Follow the creator for AI-built tools and creative projects. Use Canvas in
+personal or commercial projects, adapt it, and share integrations.
+The [MIT license](LICENSE) requires retaining the copyright and license notice.

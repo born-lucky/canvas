@@ -1,0 +1,16 @@
+name: Bug report
+description: Report a reproducible Canvas problem
+body:
+  - type: input
+    id: environment
+    attributes:
+      label: Engine, version, and operating system
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction and expected behavior
+      description: Include steps and results. Remove private notes and secrets from logs.
+    validations:
+      required: true

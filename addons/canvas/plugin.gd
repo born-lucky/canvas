@@ -15,6 +15,9 @@ func _enter_tree() -> void:
 	panel = CanvasPanel.new()
 	panel.name = "Canvas"
 	add_control_to_dock(DOCK_SLOT_RIGHT_UL, panel)
+	panel.tool.set_item_disabled(1, true)
+	panel.tool.set_item_disabled(2, true)
+	panel.tool.tooltip_text = "Freehand drawing is available in play mode (F8)"
 	panel.add_requested.connect(func():
 		var nodes := get_editor_interface().get_selection().get_selected_nodes()
 		var root := get_editor_interface().get_edited_scene_root()
@@ -78,6 +81,12 @@ func _forward_3d_force_draw_over_viewport(control: Control) -> void:
 		var screen: Vector2 = camera.unproject_position(point)
 		control.draw_circle(screen, 7, Color("40c7c2"))
 		control.draw_string(control.get_theme_default_font(), screen + Vector2(12, 5), note.name)
+		for stroke in note.get("strokes", []):
+			for index in range(1, stroke.points.size()):
+				var start: Vector3 = Vector3(stroke.points[index - 1][0], stroke.points[index - 1][1], stroke.points[index - 1][2])
+				var end: Vector3 = Vector3(stroke.points[index][0], stroke.points[index][1], stroke.points[index][2])
+				if not camera.is_position_behind(start) and not camera.is_position_behind(end):
+					control.draw_line(camera.unproject_position(start), camera.unproject_position(end), Color(stroke.color), 3, true)
 
 func _exit_tree() -> void:
 	remove_control_from_docks(panel)

@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/born-lucky/canvas/blob/main/schema/note.schema.json",
+  "title": "Canvas Note",
+  "description": "Open spatial annotation protocol created by born-lucky. Coordinates use the producer's declared convention.",
+  "type": "object",
+  "required": ["id", "name", "instruction", "scene", "context", "node_path", "position", "radius", "status"],
+  "properties": {
+    "id": {"type": "string", "pattern": "^[A-Za-z0-9_-]{1,128}$", "description": "Immutable file ID; Windows device names are excluded by the writer."},
+    "name": {"type": "string", "minLength": 1, "pattern": "\\S"},
+    "instruction": {"type": "string"},
+    "scene": {"type": "string"},
+    "context": {"type": "string"},
+    "node_path": {"type": "string"},
+    "position": {"$ref": "#/$defs/vector"},
+    "radius": {"type": "number", "minimum": 0},
+    "status": {"enum": ["draft", "queued", "working", "review", "done", "blocked"]},
+    "result": {"type": "string"},
+    "created_at": {"type": "string"},
+    "updated_at": {"type": "string"},
+    "engine": {"type": "string"},
+    "coordinate_system": {"type": "object", "properties": {"unit": {"type": "string"}, "up_axis": {"type": "string"}, "forward_axis": {"type": "string"}}},
+    "targets": {"type": "array", "items": {"$ref": "#/$defs/target"}},
+    "strokes": {"type": "array", "maxItems": 256, "items": {"$ref": "#/$defs/stroke"}}
+  },
+  "$defs": {
+    "vector": {"type": "array", "minItems": 3, "maxItems": 3, "items": {"type": "number"}},
+    "target": {
+      "type": "object", "required": ["node_path", "name", "type", "scene", "mesh"],
+      "properties": {"node_path": {"type": "string"}, "name": {"type": "string"}, "type": {"type": "string"}, "scene": {"type": "string"}, "mesh": {"type": "string"}}
+    },
+    "stroke": {
+      "type": "object", "required": ["points", "normal", "color", "width", "projection"],
+      "properties": {
+        "points": {"type": "array", "minItems": 2, "maxItems": 4096, "items": {"$ref": "#/$defs/vector"}},
+        "normal": {"$ref": "#/$defs/vector", "description": "Must be nonzero."},
+        "color": {"type": "string", "pattern": "^#?(?:[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$"},
+        "width": {"type": "number", "exclusiveMinimum": 0, "maximum": 10},
+        "projection": {"enum": ["plane", "surface"]}
+      }
+    }
+  }
+}
